@@ -27,11 +27,10 @@ Puppet::Type.type(:elasticsearch_keystore).provide(
 
   commands keystore: "#{home_dir}/bin/elasticsearch-keystore"
 
-  def self.run_keystore(args, instance, configdir = '/etc/elasticsearch', stdin = nil)
+  def self.run_keystore(args, configdir = '/etc/elasticsearch', stdin = nil)
     options = {
       custom_environment: {
-        'ES_INCLUDE' => File.join(defaults_dir, "elasticsearch-#{instance}"),
-        'ES_PATH_CONF' => "#{configdir}/#{instance}"
+        'ES_PATH_CONF' => "#{configdir}"
       },
       uid: 'elasticsearch',
       gid: 'elasticsearch',
@@ -58,18 +57,16 @@ Puppet::Type.type(:elasticsearch_keystore).provide(
   end
 
   def self.present_keystores
-    files = Dir[File.join(%w[/ etc elasticsearch *])].select do |directory|
-      File.exist? File.join(directory, 'elasticsearch.keystore')
-    end
-
-    files.map do |instance|
-      settings = run_keystore(['list'], File.basename(instance)).split("\n")
-      {
-        name: File.basename(instance),
-        ensure: :present,
-        provider: name,
-        settings: settings
-      }
+    if File.exist?('/etc/elasticsearch/elasticsearch.keystore')
+      settings = run_keystore(['list']).split("\n")
+      [{
+        :name => 'elasticsearch_secrets',
+        :ensure => :present,
+        :provider => name,
+        :settings => settings
+      }]
+    else
+      []
     end
   end
 
@@ -95,11 +92,11 @@ Puppet::Type.type(:elasticsearch_keystore).provide(
   def flush
     case @property_flush[:ensure]
     when :present
-      debug(self.class.run_keystore(['create'], resource[:name], resource[:configdir]))
+      debug(self.class.run_keystore(['create'], resource[:configdir]))
       @property_flush[:settings] = resource[:settings]
     when :absent
       File.delete(File.join([
-                              '/', 'etc', 'elasticsearch', resource[:instance], 'elasticsearch.keystore'
+                              '/', 'etc', 'elasticsearch', 'elasticsearch.keystore'
                             ]))
     end
 
@@ -112,7 +109,7 @@ Puppet::Type.type(:elasticsearch_keystore).provide(
           || (!@property_hash[:settings].include? setting)
 
         debug(self.class.run_keystore(
-                ['add', '--force', '--stdin', setting], resource[:name], resource[:configdir], value
+                ['add', '--force', '--stdin', setting], resource[:configdir], value
               ))
       end
 
@@ -120,7 +117,7 @@ Puppet::Type.type(:elasticsearch_keystore).provide(
       if resource[:purge] && !(@property_hash.nil? || @property_hash[:settings].nil?)
         (@property_hash[:settings] - @property_flush[:settings].first.keys).each do |setting|
           debug(self.class.run_keystore(
-                  ['remove', setting], resource[:name], resource[:configdir]
+                  ['remove', setting], resource[:configdir]
                 ))
         end
       end

@@ -9,6 +9,7 @@ class Puppet::Provider::ElasticParsedFile < Puppet::Provider::ParsedFile
   #
   # @return String
   def self.xpack_config(val)
+    @default_target ||= "/etc/elasticsearch/#{val}"
     @xpack_config ||= "/etc/elasticsearch/#{val}"
   end
 end
